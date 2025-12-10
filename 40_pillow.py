@@ -2,7 +2,7 @@ import os
 """ všechny obrázky ve složce """
 
 from PIL import Image
-
+#OHNO, mám je uložené i v původní složce
 """
 úkol: udělat for cyklus nad x obrázky a pro všechny udělat thumb (malá varianta)
 - mužete vzít pole cest
