@@ -113,7 +113,6 @@
             font-size: 0.85rem;
         }
 
-        /* --- burger menu --- */
         .collapsible {
             cursor: pointer;
             background: #dfe6ff;
@@ -138,7 +137,6 @@
             display: block;
         }
 
-        /* --- layout pro tabulku vlevo + poutka vpravo --- */
         .row {
             display: flex;
             gap: 2rem;
@@ -163,6 +161,7 @@
 
 <body>
     <h1>Půlkruh z vodorovných pruhů látky</h1>
+
     <div class="controls">
         <div class="field">
             <label for="radius">Poloměr R (cm)</label>
@@ -179,7 +178,7 @@
             <input id="loopWidth" type="number" min="1" value="5" step="1">
         </div>
 
-        <button id="updateBtn">Přepočítat & překreslit</button>
+        <button id="updateBtn">Přepočítat &amp; překreslit</button>
         <div id="error"></div>
     </div>
 
@@ -187,7 +186,7 @@
         <canvas id="plot" width="800" height="500"></canvas>
     </div>
 
-    <h2>Délky pruhů & počet poutek</h2>
+    <h2>Délky pruhů</h2>
 
     <div class="row">
         <div class="left">
@@ -195,37 +194,127 @@
         </div>
 
         <div class="right">
-            Počet poutek (po 50 cm):
-            <div id="loopCount" style="font-size:2rem; margin-top:0.5rem;">0</div>
+
+            <div style="display:flex; align-items:center; gap:2rem; margin-bottom:1rem;">
+                <div>
+                    Počet poutek (po 50 cm):<br>
+                    <span id="loopCount" style="font-size:2rem;">0</span>
+                </div>
+
+                <div>
+                    Jehlice (jedna strana):<br>
+                    <span id="needleCount" style="font-size:2rem; color:#000;">0</span>
+                </div>
+            </div>
+
+            <div>Chlopně délka:
+                <span id="rectA" style="color:#4a6cf7"></span> cm
+            </div>
+
+            <div>Chlopně šířka:
+                <span id="rectB" style="color:#4a6cf7"></span> cm
+            </div>
+
+            <div>Klín – výška:
+                <span id="klinH" style="color:#4a6cf7"></span> cm
+            </div>
+
+            <div>Klín – délka nástřihu:
+                <span id="klinL" style="color:#4a6cf7"></span> cm
+            </div>
+
         </div>
+
     </div>
+
 
     <h2>Odstřihy podle pruhů</h2>
     <div id="cutTableContainer"></div>
-
     <script>
         const canvas = document.getElementById('plot');
         const ctx = canvas.getContext('2d');
+
         const radiusInput = document.getElementById('radius');
         const stripInput = document.getElementById('stripHeight');
+
+        const rectASpan = document.getElementById('rectA');
+        const rectBSpan = document.getElementById('rectB');
+        const needleCountSpan = document.getElementById('needleCount');
+        const klinHSpan = document.getElementById('klinH');
+        const klinLSpan = document.getElementById('klinL');
+
         const errorEl = document.getElementById('error');
         const tableContainer = document.getElementById('tableContainer');
         const cutTableContainer = document.getElementById('cutTableContainer');
 
-        /* -------------------------  
-           FUNKCE: odstřih  
+        /* -------------------------
+           TABULKA A/B podle R/100
+        -------------------------- */
+        const rectTable = [
+            { d: 3.0, A: 150, B: 40 },
+            { d: 4.0, A: 160, B: 45 },
+            { d: 4.8, A: 210, B: 45 },
+            { d: 5.3, A: 230, B: 50 },
+            { d: 6.0, A: 260, B: 50 },
+            { d: 6.3, A: 260, B: 50 },
+            { d: 7.0, A: 270, B: 55 },
+            { d: 7.7, A: 270, B: 55 }
+        ];
+
+        function findRectByDiameter(d) {
+            let best = rectTable[0];
+            let diff = Math.abs(d - best.d);
+
+            rectTable.forEach(r => {
+                const newDiff = Math.abs(d - r.d);
+                if (newDiff < diff) {
+                    diff = newDiff;
+                    best = r;
+                }
+            });
+
+            return best;
+        }
+
+        /* -------------------------
+           TABULKA KLÍNŮ
+        -------------------------- */
+        const wedgeTable = [
+            { r: 3.0, h: 60, l: 60 },
+            { r: 4.0, h: 80, l: 80 },
+            { r: 6.3, h: 90, l: 80 },
+            { r: 7.0, h: 90, l: 90 },
+            { r: 7.7, h: 100, l: 90 }
+        ];
+
+        function findWedgeByRadius(rMeters) {
+            let best = wedgeTable[0];
+            let diff = Math.abs(rMeters - best.r);
+
+            wedgeTable.forEach(w => {
+                const newDiff = Math.abs(rMeters - w.r);
+                if (newDiff < diff) {
+                    diff = newDiff;
+                    best = w;
+                }
+            });
+
+            return best;
+        }
+
+        /* -------------------------
+           odstřih výpočet
         -------------------------- */
         function horizontalCut(R, yStrip, t) {
             const y = yStrip + t;
             if (y >= R) return 0;
+
             const xCurve = Math.sqrt(R * R - y * y);
             const xStrip = Math.sqrt(R * R - yStrip * yStrip);
+
             return xStrip - xCurve;
         }
 
-        /* -------------------------
-           TABULKA odstřihů — pro každý pruh samostatný burger
-        -------------------------- */
         function generateCutTable(strips, R, step = 10) {
             const colors = ["#ffe6e6", "#e6f0ff", "#f3e6ff", "#e6ffe6", "#f2f2f2", "#fff2e6"];
             let html = "";
@@ -242,8 +331,8 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Výška od spodní hrany (cm)</th>
-                                    <th>Odstřih dovnitř (cm)</th>
+                                    <th>Výška (cm)</th>
+                                    <th>Odstřih (cm)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -277,7 +366,7 @@
         }
 
         /* -------------------------
-           KRESLENÍ + LOGIKA
+           KRESLENÍ
         -------------------------- */
         function draw() {
             const R = parseFloat(radiusInput.value);
@@ -286,21 +375,62 @@
             errorEl.textContent = "";
 
             if (isNaN(R) || isNaN(a) || R <= 0 || a <= 0) {
-                errorEl.textContent = "Zadej kladné hodnoty R a šířky pruhu.";
-                return;
-            }
-            if (a > R) {
-                errorEl.textContent = "Šířka pruhu je větší než poloměr – zmenši a.";
+                errorEl.textContent = "Zadej kladné hodnoty.";
                 return;
             }
 
-            /* ---- výpočet poutek ---- */
-            const loopWidth = parseFloat(document.getElementById('loopWidth').value);
+            if (a > R) {
+                errorEl.textContent = "Šířka pruhu je větší než poloměr.";
+                return;
+            }
+
+            /* ---- počet poutek ---- */
             const halfCircumference = Math.PI * R;
             const loopCount = Math.floor(halfCircumference / 50);
             document.getElementById('loopCount').textContent = loopCount;
 
-            /* ---- výpočet pruhů ---- */
+            /* ---- výběr A/B ---- */
+            const rMeters = R / 100;
+            const rect = findRectByDiameter(rMeters);
+            const A = rect.A;
+            const B = rect.B;
+
+            rectASpan.textContent = A;
+            rectBSpan.textContent = B;
+
+            /* ---- výběr klínu podle R ---- */
+            const wedge = findWedgeByRadius(rMeters);
+            klinHSpan.textContent = wedge.h;
+            klinLSpan.textContent = wedge.l;
+
+            /* ---- mezera (R - A) ---- */
+            let gap = R - A;
+
+
+            /* -----------------------------------
+               JEHLE – PRAVÁ I LEVÁ STRANA
+               první 10 cm, další po 25 cm
+            ----------------------------------- */
+            let needleCount = 0;
+            let needlePositionsRight = [];
+            let needlePositionsLeft = [];
+
+            if (gap >= 10) {
+                let x = A + 10;
+                needleCount = 1;
+                needlePositionsRight.push(x);
+
+                while (x + 25 < R) {
+                    x += 25;
+                    needlePositionsRight.push(x);
+                    needleCount++;
+                }
+
+                needlePositionsLeft = needlePositionsRight.map(v => -v);
+            }
+
+            needleCountSpan.textContent = needleCount;
+            /* ---- pruhy ---- */
             const fullStrips = Math.floor(R / a);
             const remainder = R - fullStrips * a;
             const stripHeights = [];
@@ -325,7 +455,7 @@
                 }
             });
 
-            /* ---- vykreslení canvasu ---- */
+            /* ---- canvas ---- */
             const margin = 40;
             const w = canvas.width;
             const h = canvas.height;
@@ -342,10 +472,11 @@
             ctx.fillStyle = "#fcfcff";
             ctx.fillRect(0, 0, w, h);
 
+            /* ---- půlkruh ---- */
             ctx.strokeStyle = "#f39c12";
             ctx.lineWidth = 2.5;
             ctx.beginPath();
-            for (let t = 0; t <= Math.PI + 0.001; t += Math.PI / 180) {
+            for (let t = 0; t <= Math.PI; t += Math.PI / 180) {
                 const x = R * Math.cos(t);
                 const yVal = R * Math.sin(t);
                 const sx = toScreenX(x);
@@ -355,11 +486,11 @@
             }
             ctx.stroke();
 
+            /* ---- pruhy ---- */
             const colors = ["#e74c3c", "#2980b9", "#9b59b6", "#27ae60", "#7f8c8d", "#e67e22"];
             const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
             stripHeights.forEach((sh, idx) => {
-                const stripIndex = idx + 1;
                 const color = colors[idx % colors.length];
                 const lengthObj = lengths[idx];
                 const L = lengthObj.length;
@@ -371,22 +502,18 @@
 
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.rect(
+                ctx.strokeRect(
                     toScreenX(xLeft),
                     toScreenY(yTop),
                     (xRight - xLeft) * scale,
                     (yTop - yBottom) * scale
                 );
-                ctx.stroke();
 
                 if (yTop < R - 1e-6) {
                     const xInt = Math.sqrt(Math.max(0, R * R - yTop * yTop));
                     const sx1 = toScreenX(xInt);
                     const sx2 = toScreenX(-xInt);
                     const sy = toScreenY(yTop);
-
-                    const label = letters[idx];
 
                     ctx.fillStyle = color;
                     ctx.beginPath();
@@ -397,24 +524,78 @@
                     ctx.fill();
 
                     ctx.font = "12px system-ui";
-                    ctx.fillText(label, sx1 + 8, sy - 4);
-                    ctx.fillText(label, sx2 - 14, sy - 4);
+                    ctx.fillText(letters[idx], sx1 + 8, sy - 4);
+                    ctx.fillText(letters[idx], sx2 - 14, sy - 4);
                 }
             });
 
-            /* ---- tabulka délek vlevo ---- */
+            /* -------------------------
+               OBDÉLNÍKY KOLEM BODU X
+            -------------------------- */
+            ctx.save();
+            ctx.strokeStyle = "black";
+            ctx.setLineDash([6, 4]);
+            ctx.lineWidth = 2;
+
+            // levý obdélník: od -A do 0
+            ctx.strokeRect(
+                toScreenX(-A),
+                toScreenY(B),
+                A * scale,
+                B * scale
+            );
+
+            // pravý obdélník: od 0 do +A
+            ctx.strokeRect(
+                toScreenX(0),
+                toScreenY(B),
+                A * scale,
+                B * scale
+            );
+
+            ctx.restore();
+
+            /* ---- bod X ---- */
+            const sx0 = toScreenX(0);
+            const sy0 = toScreenY(0);
+            ctx.fillStyle = "black";
+            ctx.beginPath();
+            ctx.arc(sx0, sy0, 4, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillText("X", sx0 + 6, sy0 - 6);
+
+            /* -------------------------
+               KRESLENÍ JEHLIC
+            -------------------------- */
+            ctx.fillStyle = "#000";
+
+            // pravá strana
+            needlePositionsRight.forEach(x => {
+                ctx.beginPath();
+                ctx.arc(toScreenX(x), toScreenY(B), 4, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+
+            // levá strana
+            needlePositionsLeft.forEach(x => {
+                ctx.beginPath();
+                ctx.arc(toScreenX(x), toScreenY(B), 4, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+
+            /* ---- tabulka délek ---- */
             let html = "<table><thead><tr><th>Pruh</th><th>Horní výška y (cm)</th><th>Délka horní hrany (cm)</th></tr></thead><tbody>";
             lengths.forEach(obj => {
                 html += `<tr>
-                    <td>${obj.index}</td>
-                    <td>${obj.yTop.toFixed(2)}</td>
-                    <td>${obj.length.toFixed(2)}</td>
-                </tr>`;
+                <td>${obj.index}</td>
+                <td>${obj.yTop.toFixed(2)}</td>
+                <td>${obj.length.toFixed(2)}</td>
+            </tr>`;
             });
             html += "</tbody></table>";
             tableContainer.innerHTML = html;
 
-            /* ---- burger tabulka odstřihů ---- */
+            /* ---- odstřihy ---- */
             const cutHTML = generateCutTable(stripHeights, R, 10);
             cutTableContainer.innerHTML = cutHTML;
         }
@@ -423,9 +604,7 @@
         document.getElementById('updateBtn').addEventListener('click', draw);
         radiusInput.addEventListener('change', draw);
         stripInput.addEventListener('change', draw);
-        document.getElementById('loopWidth').addEventListener('change', draw);
 
-        /* --- ovládání burger menu --- */
         document.addEventListener("click", e => {
             const header =
                 e.target.classList.contains("collapsible") ? e.target :
@@ -434,12 +613,12 @@
 
             if (!header) return;
 
-            const content = header.nextElementSibling;
-            content.classList.toggle("open");
+            header.nextElementSibling.classList.toggle("open");
         });
 
         draw();
     </script>
+
 </body>
 
 </html>
